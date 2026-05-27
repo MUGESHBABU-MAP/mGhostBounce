@@ -1,0 +1,1032 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Flappy Kiro</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background: #000;
+      }
+
+      canvas {
+        display: block;
+        width: 100vw;
+        height: 100vh;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="gameCanvas"></canvas>
+
+    <!-- Constants and GameState -->
+    <script>
+      // ── Constants ──────────────────────────────────────────────────────────────
+      const PIPE_SPEED = 150; // px/s
+      const PIPE_INTERVAL = 200; // px (leading-edge-to-leading-edge)
+      const PIPE_WIDTH = 60; // px
+      const GAP_MIN_RATIO = 0.2; // gap center min: 20% of canvas height
+      const GAP_MAX_RATIO = 0.8; // gap center max: 80% of canvas height
+      const CLOUD_SPEED_MIN = 0.4; // fraction of PIPE_SPEED
+      const CLOUD_SPEED_MAX = 0.6; // fraction of PIPE_SPEED
+      const CLOUD_INTERVAL_MIN = 200; // px
+      const CLOUD_INTERVAL_MAX = 400; // px
+      const GRAVITY = 1200; // px/s²
+      const JUMP_VELOCITY = -500; // px/s (upward)
+
+      // ── Data Shape Factories ───────────────────────────────────────────────────
+
+      /**
+       * GhostyState — the player character's mutable state.
+       * @param {number} x   Fixed horizontal position (e.g. 20% of canvas width)
+       * @param {number} y   Current vertical position (top-left of bounding box)
+       * @returns {GhostyState}
+       */
+      function createGhostyState(x, y) {
+        return {
+          x,
+          y,
+          vy: 0, // current vertical velocity (px/s)
+          width: 48, // rendered width (px)
+          height: 48, // rendered height (px)
+        };
+      }
+
+      /**
+       * PipePair — a pair of top/bottom pipes with a gap.
+       * @param {number} x            Left edge of the pipe pair
+       * @param {number} gapCenterY   Vertical center of the gap
+       * @param {number} gapHeight    Height of the gap (≥ 2 × ghosty.height)
+       * @returns {PipePair}
+       */
+      function createPipePair(x, gapCenterY, gapHeight) {
+        return {
+          x,
+          gapCenterY,
+          gapHeight,
+          width: PIPE_WIDTH,
+          scored: false,
+        };
+      }
+
+      /**
+       * Cloud — a decorative (and hazardous) cloud obstacle.
+       * @param {number} x      Left edge
+       * @param {number} y      Top edge
+       * @param {number} width  Randomized width (e.g. 80–140 px)
+       * @param {number} height Randomized height (e.g. 40–70 px)
+       * @param {number} speed  Scroll speed (px/s)
+       * @returns {Cloud}
+       */
+      function createCloud(x, y, width, height, speed) {
+        return { x, y, width, height, speed };
+      }
+
+      /**
+       * createGameState — returns a fresh GameState for a new game session.
+       * @param {HTMLCanvasElement}        canvas
+       * @param {CanvasRenderingContext2D} ctx
+       * @param {number}                  highScore  Persisted high score (default 0)
+       * @returns {GameState}
+       */
+      function createGameState(canvas, ctx, highScore = 0) {
+        return {
+          phase: "START", // 'START' | 'PLAYING' | 'GAME_OVER'
+          ghosty: createGhostyState(
+            canvas.width * 0.2, // fixed horizontal position
+            canvas.height / 2 - 24, // vertically centred
+          ),
+          pipes: [], // PipePair[]
+          clouds: [], // Cloud[]
+          score: 0,
+          highScore,
+          canvas,
+          ctx,
+          lastTimestamp: 0,
+          nextPipeX: canvas.width + PIPE_INTERVAL, // x at which the next pipe spawns
+          nextCloudX: canvas.width + CLOUD_INTERVAL_MIN, // x at which the next cloud spawns
+        };
+      }
+    </script>
+
+    <!-- Physics_Engine -->
+    <script>
+      // ── Physics_Engine ─────────────────────────────────────────────────────────
+      const PhysicsEngine = {
+        GRAVITY: GRAVITY, // 1200 px/s² (from Constants block)
+        JUMP_VELOCITY: JUMP_VELOCITY, // -500 px/s (from Constants block)
+        MAX_FALL_SPEED: 600, // px/s — updated on resize to canvas.height
+
+        /**
+         * Apply gravity and update Ghosty's position for one frame.
+         * @param {GhostyState} ghosty
+         * @param {number}      delta  Elapsed time in seconds
+         */
+        update(ghosty, delta) {
+          // Accelerate downward by gravity
+          ghosty.vy += this.GRAVITY * delta;
+          // Clamp velocity to [JUMP_VELOCITY, MAX_FALL_SPEED]
+          if (ghosty.vy < this.JUMP_VELOCITY) ghosty.vy = this.JUMP_VELOCITY;
+          if (ghosty.vy > this.MAX_FALL_SPEED) ghosty.vy = this.MAX_FALL_SPEED;
+          // Integrate position
+          ghosty.y += ghosty.vy * delta;
+        },
+
+        /**
+         * Apply an instantaneous upward jump impulse.
+         * Replaces current velocity — no stacking.
+         * @param {GhostyState} ghosty
+         */
+        applyJump(ghosty) {
+          ghosty.vy = this.JUMP_VELOCITY;
+        },
+      };
+    </script>
+
+    <!-- Score_Manager -->
+    <script>
+      // ── Score_Manager ──────────────────────────────────────────────────────────
+      const ScoreManager = {
+        STORAGE_KEY: "flappyKiroHighScore",
+
+        /**
+         * Load the persisted high score from localStorage.
+         * Returns 0 if the value is missing, non-numeric, negative, or if
+         * localStorage throws (e.g. private-browsing with storage disabled).
+         * @returns {number}
+         */
+        loadHighScore() {
+          try {
+            const raw = localStorage.getItem(this.STORAGE_KEY);
+            if (raw === null || raw === undefined) return 0;
+            const parsed = parseInt(raw, 10);
+            if (isNaN(parsed) || parsed < 0) return 0;
+            return parsed;
+          } catch (e) {
+            return 0;
+          }
+        },
+
+        /**
+         * Persist the high score to localStorage.
+         * Logs a console.warn on failure; the game continues with an in-memory value.
+         * @param {number} score
+         */
+        saveHighScore(score) {
+          try {
+            localStorage.setItem(this.STORAGE_KEY, String(score));
+          } catch (e) {
+            console.warn(
+              "ScoreManager: failed to save high score to localStorage",
+              e,
+            );
+          }
+        },
+
+        /**
+         * Return the new high score, which is the maximum of the current score
+         * and the prior high score.
+         * @param {number} score
+         * @param {number} highScore
+         * @returns {number}
+         */
+        checkAndUpdateHighScore(score, highScore) {
+          return Math.max(score, highScore);
+        },
+      };
+    </script>
+
+    <!-- Collision_Detector -->
+    <script>
+      // ── Collision_Detector ─────────────────────────────────────────────────────
+
+      /**
+       * AABB overlap test.
+       * Returns true if rectangle A overlaps rectangle B.
+       *
+       * @param {number} ax  A left edge
+       * @param {number} ay  A top edge
+       * @param {number} aw  A width
+       * @param {number} ah  A height
+       * @param {number} bx  B left edge
+       * @param {number} by  B top edge
+       * @param {number} bw  B width
+       * @param {number} bh  B height
+       * @returns {boolean}
+       */
+      function aabbOverlap(ax, ay, aw, ah, bx, by, bw, bh) {
+        return ax < bx + bw && ax + aw > bx && ay < by + bh && ay + ah > by;
+      }
+
+      const CollisionDetector = {
+        /**
+         * Check whether Ghosty has collided with any boundary, pipe, or cloud.
+         *
+         * @param {{ x: number, y: number, width: number, height: number }} ghosty
+         * @param {Array<{ x: number, gapCenterY: number, gapHeight: number, width: number }>} pipes
+         * @param {Array<{ x: number, y: number, width: number, height: number }>} clouds
+         * @param {number} canvasHeight
+         * @returns {{ collided: boolean, reason: 'pipe' | 'cloud' | 'top' | 'bottom' | null }}
+         */
+        check(ghosty, pipes, clouds, canvasHeight) {
+          // ── Boundary checks ──────────────────────────────────────────────────
+          if (ghosty.y <= 0) {
+            return { collided: true, reason: "top" };
+          }
+          if (ghosty.y + ghosty.height >= canvasHeight) {
+            return { collided: true, reason: "bottom" };
+          }
+
+          // ── Pipe collision ───────────────────────────────────────────────────
+          for (const pipe of pipes) {
+            const gapTop = pipe.gapCenterY - pipe.gapHeight / 2;
+            const gapBottom = pipe.gapCenterY + pipe.gapHeight / 2;
+
+            // Top pipe bounding box: (pipe.x, 0, pipe.width, gapTop)
+            if (
+              aabbOverlap(
+                ghosty.x,
+                ghosty.y,
+                ghosty.width,
+                ghosty.height,
+                pipe.x,
+                0,
+                pipe.width,
+                gapTop,
+              )
+            ) {
+              return { collided: true, reason: "pipe" };
+            }
+
+            // Bottom pipe bounding box: (pipe.x, gapBottom, pipe.width, canvasHeight - gapBottom)
+            if (
+              aabbOverlap(
+                ghosty.x,
+                ghosty.y,
+                ghosty.width,
+                ghosty.height,
+                pipe.x,
+                gapBottom,
+                pipe.width,
+                canvasHeight - gapBottom,
+              )
+            ) {
+              return { collided: true, reason: "pipe" };
+            }
+          }
+
+          // ── Cloud collision ──────────────────────────────────────────────────
+          for (const cloud of clouds) {
+            if (
+              aabbOverlap(
+                ghosty.x,
+                ghosty.y,
+                ghosty.width,
+                ghosty.height,
+                cloud.x,
+                cloud.y,
+                cloud.width,
+                cloud.height,
+              )
+            ) {
+              return { collided: true, reason: "cloud" };
+            }
+          }
+
+          return { collided: false, reason: null };
+        },
+      };
+    </script>
+
+    <!-- Spawning (pipes and clouds) -->
+    <script>
+      // ── Spawning ───────────────────────────────────────────────────────────────
+
+      /** Minimum gap height in pixels (independent of ghosty size). */
+      const GAP_MINIMUM_PX = 80;
+
+      /**
+       * Spawn a new PipePair at the right edge of the canvas.
+       *
+       * @param {number} canvasWidth   Current canvas width in pixels
+       * @param {number} canvasHeight  Current canvas height in pixels
+       * @param {number} ghostyHeight  Ghosty's bounding-box height in pixels
+       * @returns {PipePair}
+       */
+      function spawnPipe(canvasWidth, canvasHeight, ghostyHeight) {
+        const minCenter = GAP_MIN_RATIO * canvasHeight;
+        const maxCenter = GAP_MAX_RATIO * canvasHeight;
+        const gapCenterY = minCenter + Math.random() * (maxCenter - minCenter);
+        const gapHeight = Math.max(2 * ghostyHeight, GAP_MINIMUM_PX);
+
+        return createPipePair(canvasWidth, gapCenterY, gapHeight);
+      }
+
+      /**
+       * Spawn a new Cloud at the right edge of the canvas.
+       *
+       * @param {number} canvasWidth   Current canvas width in pixels
+       * @param {number} canvasHeight  Current canvas height in pixels
+       * @returns {Cloud}
+       */
+      function spawnCloud(canvasWidth, canvasHeight) {
+        const minY = 0.2 * canvasHeight;
+        const maxY = 0.8 * canvasHeight;
+        const y = minY + Math.random() * (maxY - minY);
+
+        const width = 80 + Math.random() * 60; // 80–140 px
+        const height = 40 + Math.random() * 30; // 40–70 px
+        const speed =
+          CLOUD_SPEED_MIN * PIPE_SPEED +
+          Math.random() * (CLOUD_SPEED_MAX - CLOUD_SPEED_MIN) * PIPE_SPEED;
+
+        return createCloud(canvasWidth, y, width, height, speed);
+      }
+
+      /**
+       * Scroll and cull a mixed array of entities.
+       *
+       * For PipePair entities (no `speed` property), uses the global PIPE_SPEED.
+       * For Cloud entities (have a `speed` property), uses `entity.speed`.
+       * Removes any entity whose right edge (`x + width`) is less than 0.
+       *
+       * @param {Array}  entities  Array of PipePair or Cloud objects (mutated)
+       * @param {number} delta     Elapsed time in seconds
+       * @returns {Array}          The filtered array (same reference)
+       */
+      function scrollAndCull(entities, delta) {
+        for (const entity of entities) {
+          const spd = entity.speed !== undefined ? entity.speed : PIPE_SPEED;
+          entity.x -= spd * delta;
+        }
+        const keep = entities.filter((e) => e.x + e.width >= 0);
+        entities.length = 0;
+        for (const e of keep) entities.push(e);
+        return entities;
+      }
+    </script>
+
+    <!-- Audio_Manager -->
+    <script>
+      // ── Audio_Manager ──────────────────────────────────────────────────────────
+
+      const AudioManager = {
+        sounds: { jump: null, gameOver: null },
+        ready: false,
+
+        /**
+         * Load both sound assets. Attaches onerror handlers that log a warning
+         * and set the slot to null so play calls degrade gracefully.
+         * Should only be called once, on the first user interaction.
+         */
+        preload() {
+          if (this.ready) return;
+          this.ready = true;
+
+          const jumpAudio = new Audio("assets/jump.wav");
+          jumpAudio.onerror = () => {
+            console.warn("AudioManager: failed to load assets/jump.wav");
+            this.sounds.jump = null;
+          };
+          this.sounds.jump = jumpAudio;
+
+          const gameOverAudio = new Audio("assets/game_over.wav");
+          gameOverAudio.onerror = () => {
+            console.warn("AudioManager: failed to load assets/game_over.wav");
+            this.sounds.gameOver = null;
+          };
+          this.sounds.gameOver = gameOverAudio;
+        },
+
+        /**
+         * Play the jump sound from the beginning.
+         * Silently ignores autoplay-policy rejections.
+         */
+        playJump() {
+          const snd = this.sounds.jump;
+          if (snd !== null) {
+            snd.currentTime = 0;
+            snd.play().catch(() => {});
+          }
+        },
+
+        /**
+         * Play the game-over sound from the beginning.
+         * Silently ignores autoplay-policy rejections.
+         */
+        playGameOver() {
+          const snd = this.sounds.gameOver;
+          if (snd !== null) {
+            snd.currentTime = 0;
+            snd.play().catch(() => {});
+          }
+        },
+      };
+    </script>
+
+    <!-- Input_Handler -->
+    <script>
+      // ── Input_Handler ──────────────────────────────────────────────────────────
+
+      const InputHandler = {
+        /** Callback invoked on any jump-triggering input. Set by GameLoop (Task 15). */
+        onJump: null,
+
+        /** Stored bound handler references so detach() removes the exact same functions. */
+        _keyHandler: null,
+        _mouseHandler: null,
+        _touchHandler: null,
+
+        /** Reference to the canvas element, stored during attach() for use in detach(). */
+        _canvas: null,
+
+        /**
+         * Attach input listeners.
+         * - keydown on document  → fires when Space is pressed
+         * - mousedown on canvas  → fires on any mouse button press
+         * - touchstart on canvas → fires on touch; calls e.preventDefault() to suppress scroll
+         *
+         * @param {HTMLCanvasElement} canvas
+         */
+        attach(canvas) {
+          this._canvas = canvas;
+
+          // Bind handlers once and store references so detach() can remove them.
+          this._keyHandler = (e) => {
+            if (e.code === "Space" || e.key === " ") {
+              e.preventDefault();
+              if (typeof this.onJump === "function") this.onJump();
+            }
+          };
+
+          this._mouseHandler = () => {
+            if (typeof this.onJump === "function") this.onJump();
+          };
+
+          this._touchHandler = (e) => {
+            e.preventDefault(); // suppress scroll / zoom on touch
+            if (typeof this.onJump === "function") this.onJump();
+          };
+
+          document.addEventListener("keydown", this._keyHandler);
+          canvas.addEventListener("mousedown", this._mouseHandler);
+          // { passive: false } is required to allow e.preventDefault() inside a touchstart handler
+          canvas.addEventListener("touchstart", this._touchHandler, {
+            passive: false,
+          });
+        },
+
+        /**
+         * Remove all three input listeners that were added by attach().
+         * Safe to call even if attach() was never called.
+         */
+        detach() {
+          if (this._keyHandler) {
+            document.removeEventListener("keydown", this._keyHandler);
+            this._keyHandler = null;
+          }
+          if (this._mouseHandler) {
+            if (this._canvas) {
+              this._canvas.removeEventListener("mousedown", this._mouseHandler);
+            }
+            this._mouseHandler = null;
+          }
+          if (this._touchHandler) {
+            if (this._canvas) {
+              this._canvas.removeEventListener(
+                "touchstart",
+                this._touchHandler,
+              );
+            }
+            this._touchHandler = null;
+          }
+          this._canvas = null;
+        },
+      };
+    </script>
+
+    <!-- Renderer -->
+    <script>
+      // ── Renderer ───────────────────────────────────────────────────────────────
+
+      /**
+       * Returns a small random jitter value in the range [-max, +max].
+       * Used to give strokes a hand-drawn, sketchy appearance.
+       * @param {number} [max=1.5]
+       * @returns {number}
+       */
+      function jitter(max = 1.5) {
+        return (Math.random() * 2 - 1) * max;
+      }
+
+      const Renderer = {
+        /**
+         * Fill the canvas with a light-blue sky and add a few horizontal
+         * sketchy texture lines to break up the flat colour.
+         *
+         * @param {CanvasRenderingContext2D} ctx
+         * @param {HTMLCanvasElement}        canvas
+         */
+        drawBackground(ctx, canvas) {
+          // Solid sky fill — background is allowed to be a fill
+          ctx.fillStyle = "#b0e0ff";
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+          // A handful of faint horizontal sketch lines for texture
+          ctx.save();
+          ctx.strokeStyle = "rgba(255,255,255,0.35)";
+          ctx.lineWidth = 1;
+          const lineCount = 6;
+          for (let i = 1; i <= lineCount; i++) {
+            const y = Math.floor((canvas.height / (lineCount + 1)) * i);
+            ctx.beginPath();
+            ctx.moveTo(jitter(2), y + jitter(2));
+            ctx.lineTo(canvas.width + jitter(2), y + jitter(2));
+            ctx.stroke();
+          }
+          ctx.restore();
+        },
+
+        /**
+         * Draw Ghosty using the provided image, or fall back to a sketchy
+         * strokeRect if the image is null (e.g. failed to load).
+         *
+         * @param {CanvasRenderingContext2D}  ctx
+         * @param {{ x: number, y: number, width: number, height: number }} ghosty
+         * @param {HTMLImageElement | null}   image
+         */
+        drawGhosty(ctx, ghosty, image) {
+          if (image) {
+            ctx.drawImage(
+              image,
+              ghosty.x,
+              ghosty.y,
+              ghosty.width,
+              ghosty.height,
+            );
+          } else {
+            ctx.save();
+            ctx.strokeStyle = "#ffffff";
+            ctx.lineWidth = 2;
+            ctx.strokeRect(
+              ghosty.x + jitter(),
+              ghosty.y + jitter(),
+              ghosty.width,
+              ghosty.height,
+            );
+            ctx.restore();
+          }
+        },
+
+        /**
+         * Draw all active pipe pairs with a green sketchy stroke style.
+         * Each pipe pair consists of a top pipe and a bottom pipe separated
+         * by a gap.
+         *
+         * @param {CanvasRenderingContext2D} ctx
+         * @param {Array<{ x: number, gapCenterY: number, gapHeight: number, width: number }>} pipes
+         * @param {number} canvasHeight
+         */
+        drawPipes(ctx, pipes, canvasHeight) {
+          ctx.save();
+          ctx.strokeStyle = "#228B22"; // forest green
+          ctx.lineWidth = 3;
+
+          for (const pipe of pipes) {
+            const gapTop = pipe.gapCenterY - pipe.gapHeight / 2;
+            const gapBottom = pipe.gapCenterY + pipe.gapHeight / 2;
+
+            // Top pipe
+            ctx.strokeRect(
+              pipe.x + jitter(),
+              0 + jitter(),
+              pipe.width + jitter(),
+              gapTop + jitter(),
+            );
+
+            // Bottom pipe
+            ctx.strokeRect(
+              pipe.x + jitter(),
+              gapBottom + jitter(),
+              pipe.width + jitter(),
+              canvasHeight - gapBottom + jitter(),
+            );
+          }
+
+          ctx.restore();
+        },
+
+        /**
+         * Draw all active clouds as sketchy white/grey stroke rectangles.
+         *
+         * @param {CanvasRenderingContext2D} ctx
+         * @param {Array<{ x: number, y: number, width: number, height: number }>} clouds
+         */
+        drawClouds(ctx, clouds) {
+          ctx.save();
+          ctx.strokeStyle = "#cccccc";
+          ctx.lineWidth = 2;
+
+          for (const cloud of clouds) {
+            ctx.strokeRect(
+              cloud.x + jitter(),
+              cloud.y + jitter(),
+              cloud.width + jitter(),
+              cloud.height + jitter(),
+            );
+          }
+
+          ctx.restore();
+        },
+
+        /**
+         * Draw a semi-transparent score bar at the bottom of the canvas.
+         * Displays "Score: X | High: X" in a retro monospace font.
+         *
+         * @param {CanvasRenderingContext2D} ctx
+         * @param {number}                  score
+         * @param {number}                  highScore
+         * @param {HTMLCanvasElement}        canvas
+         */
+        drawScoreBar(ctx, score, highScore, canvas) {
+          const barHeight = 40;
+          const y = canvas.height - barHeight;
+
+          ctx.save();
+
+          // Semi-transparent dark bar
+          ctx.fillStyle = "rgba(0, 0, 0, 0.55)";
+          ctx.fillRect(0, y, canvas.width, barHeight);
+
+          // Score text
+          ctx.fillStyle = "#ffffff";
+          ctx.font = "bold 20px 'Courier New', Courier, monospace";
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillText(
+            `Score: ${score}  |  High: ${highScore}`,
+            canvas.width / 2,
+            y + barHeight / 2,
+          );
+
+          ctx.restore();
+        },
+
+        /**
+         * Draw the start screen: title, Ghosty centred, and a prompt.
+         *
+         * @param {CanvasRenderingContext2D}  ctx
+         * @param {HTMLCanvasElement}          canvas
+         * @param {{ x: number, y: number, width: number, height: number }} ghosty
+         * @param {HTMLImageElement | null}    image
+         */
+        drawStartScreen(ctx, canvas, ghosty, image) {
+          const cx = canvas.width / 2;
+          const cy = canvas.height / 2;
+
+          ctx.save();
+
+          // Title
+          ctx.fillStyle = "#1a1a2e";
+          ctx.font = "bold 56px 'Courier New', Courier, monospace";
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillText("FLAPPY KIRO", cx, cy - 100);
+
+          // Ghosty centred on screen
+          const gw = ghosty.width * 2;
+          const gh = ghosty.height * 2;
+          const gx = cx - gw / 2;
+          const gy = cy - gh / 2;
+
+          if (image) {
+            ctx.drawImage(image, gx, gy, gw, gh);
+          } else {
+            ctx.strokeStyle = "#ffffff";
+            ctx.lineWidth = 2;
+            ctx.strokeRect(gx + jitter(), gy + jitter(), gw, gh);
+          }
+
+          // Prompt
+          ctx.fillStyle = "#1a1a2e";
+          ctx.font = "22px 'Courier New', Courier, monospace";
+          ctx.fillText("Press Space / Click / Tap to Start", cx, cy + 80);
+
+          ctx.restore();
+        },
+
+        /**
+         * Draw the game-over screen: semi-transparent overlay, "GAME OVER"
+         * heading, final score, high score, and a restart prompt.
+         *
+         * @param {CanvasRenderingContext2D} ctx
+         * @param {HTMLCanvasElement}        canvas
+         * @param {number}                  score
+         * @param {number}                  highScore
+         */
+        drawGameOverScreen(ctx, canvas, score, highScore) {
+          const cx = canvas.width / 2;
+          const cy = canvas.height / 2;
+
+          ctx.save();
+
+          // Semi-transparent dark overlay
+          ctx.fillStyle = "rgba(0, 0, 0, 0.65)";
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+          // "GAME OVER" heading
+          ctx.fillStyle = "#ff4444";
+          ctx.font = "bold 64px 'Courier New', Courier, monospace";
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillText("GAME OVER", cx, cy - 80);
+
+          // Final score
+          ctx.fillStyle = "#ffffff";
+          ctx.font = "bold 32px 'Courier New', Courier, monospace";
+          ctx.fillText(`Score: ${score}`, cx, cy);
+
+          // High score
+          ctx.font = "28px 'Courier New', Courier, monospace";
+          ctx.fillStyle = "#ffd700";
+          ctx.fillText(`High Score: ${highScore}`, cx, cy + 50);
+
+          // Restart prompt
+          ctx.fillStyle = "#cccccc";
+          ctx.font = "22px 'Courier New', Courier, monospace";
+          ctx.fillText("Press Space / Click / Tap to Restart", cx, cy + 110);
+
+          ctx.restore();
+        },
+
+        /**
+         * Top-level render dispatcher. Calls the appropriate draw methods
+         * based on the current game phase.
+         *
+         * @param {{ phase: string, ghosty: object, pipes: Array, clouds: Array,
+         *           score: number, highScore: number,
+         *           canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D }} gameState
+         * @param {HTMLImageElement | null} ghostyImage
+         */
+        render(gameState, ghostyImage = null) {
+          const {
+            ctx,
+            canvas,
+            phase,
+            ghosty,
+            pipes,
+            clouds,
+            score,
+            highScore,
+          } = gameState;
+
+          // Always draw the background first
+          this.drawBackground(ctx, canvas);
+
+          if (phase === "START") {
+            // Clouds add atmosphere on the start screen too
+            this.drawClouds(ctx, clouds);
+            this.drawStartScreen(ctx, canvas, ghosty, ghostyImage);
+          } else if (phase === "PLAYING") {
+            this.drawClouds(ctx, clouds);
+            this.drawPipes(ctx, pipes, canvas.height);
+            this.drawGhosty(ctx, ghosty, ghostyImage);
+            this.drawScoreBar(ctx, score, highScore, canvas);
+          } else if (phase === "GAME_OVER") {
+            this.drawClouds(ctx, clouds);
+            this.drawPipes(ctx, pipes, canvas.height);
+            this.drawGhosty(ctx, ghosty, ghostyImage);
+            this.drawGameOverScreen(ctx, canvas, score, highScore);
+          }
+        },
+      };
+    </script>
+
+    <!-- GameLoop and main entry point -->
+    <script>
+      // ── Module-level variables ─────────────────────────────────────────────────
+      /** @type {HTMLImageElement | null} */
+      let ghostyImage = null;
+
+      /** @type {GameState | null} */
+      let gameState = null;
+
+      /** @type {number | null} requestAnimationFrame ID for cancellation */
+      let rafId = null;
+
+      /** Flag to prevent repeated GAME_OVER processing within a single collision event */
+      let gameOverProcessed = false;
+
+      // ── GameLoop ───────────────────────────────────────────────────────────────
+
+      /**
+       * Main animation tick — called by requestAnimationFrame each frame.
+       * @param {number} timestamp  DOMHighResTimeStamp provided by rAF
+       */
+      function tick(timestamp) {
+        // Compute delta time in seconds; clamp to 0.05 s max to prevent
+        // spiral-of-death when the tab is backgrounded or the frame rate drops.
+        const delta = Math.min(
+          (timestamp - (gameState.lastTimestamp || timestamp)) / 1000,
+          0.05,
+        );
+        gameState.lastTimestamp = timestamp;
+
+        if (gameState.phase === "PLAYING") {
+          // ── Physics ──────────────────────────────────────────────────────────
+          PhysicsEngine.update(gameState.ghosty, delta);
+
+          // ── Scroll and cull pipes and clouds ─────────────────────────────────
+          scrollAndCull(gameState.pipes, delta);
+          scrollAndCull(gameState.clouds, delta);
+
+          // ── Spawn pipes ───────────────────────────────────────────────────────
+          // Spawn a new pipe when the array is empty OR the last pipe has scrolled
+          // far enough that a new one should appear at the right edge.
+          if (
+            gameState.pipes.length === 0 ||
+            gameState.pipes[gameState.pipes.length - 1].x <=
+              gameState.canvas.width - PIPE_INTERVAL
+          ) {
+            const pipe = spawnPipe(
+              gameState.canvas.width,
+              gameState.canvas.height,
+              gameState.ghosty.height,
+            );
+            gameState.pipes.push(pipe);
+          }
+
+          // ── Spawn clouds ──────────────────────────────────────────────────────
+          if (
+            gameState.clouds.length === 0 ||
+            gameState.clouds[gameState.clouds.length - 1].x <=
+              gameState.canvas.width - CLOUD_INTERVAL_MIN
+          ) {
+            const cloud = spawnCloud(
+              gameState.canvas.width,
+              gameState.canvas.height,
+            );
+            gameState.clouds.push(cloud);
+          }
+
+          // ── Score check ───────────────────────────────────────────────────────
+          // A pipe is "passed" when its horizontal midpoint moves behind Ghosty's x.
+          for (const pipe of gameState.pipes) {
+            if (!pipe.scored && pipe.x + pipe.width / 2 < gameState.ghosty.x) {
+              pipe.scored = true;
+              gameState.score += 1;
+            }
+          }
+
+          // ── Collision check ───────────────────────────────────────────────────
+          const collision = CollisionDetector.check(
+            gameState.ghosty,
+            gameState.pipes,
+            gameState.clouds,
+            gameState.canvas.height,
+          );
+
+          if (collision.collided && !gameOverProcessed) {
+            gameOverProcessed = true;
+            gameState.phase = "GAME_OVER";
+
+            // Update and persist high score
+            gameState.highScore = ScoreManager.checkAndUpdateHighScore(
+              gameState.score,
+              gameState.highScore,
+            );
+            ScoreManager.saveHighScore(gameState.highScore);
+
+            // Play game-over sound
+            AudioManager.playGameOver();
+          }
+        }
+
+        // ── Render every tick regardless of phase ─────────────────────────────
+        Renderer.render(gameState, ghostyImage);
+
+        // Schedule the next frame
+        rafId = requestAnimationFrame(tick);
+      }
+
+      /**
+       * Start a brand-new game from the START phase.
+       * Resets all mutable state and begins the rAF loop.
+       */
+      function startGame() {
+        gameOverProcessed = false;
+
+        gameState.phase = "PLAYING";
+        gameState.score = 0;
+        gameState.pipes = [];
+        gameState.clouds = [];
+        gameState.lastTimestamp = 0;
+
+        // Reset Ghosty to the vertical centre of the canvas
+        gameState.ghosty.y =
+          gameState.canvas.height / 2 - gameState.ghosty.height / 2;
+        gameState.ghosty.vy = 0;
+      }
+
+      /**
+       * Restart the game after a GAME_OVER, preserving the high score.
+       */
+      function restartGame() {
+        const savedHighScore = gameState.highScore;
+        startGame();
+        gameState.highScore = savedHighScore;
+      }
+
+      // ── Bootstrap ──────────────────────────────────────────────────────────────
+      (function bootstrap() {
+        const canvas = document.getElementById("gameCanvas");
+
+        // Size canvas to fill the viewport
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          document.body.innerHTML =
+            '<p style="color:white;padding:2rem;">Your browser does not support HTML5 Canvas. Please use a modern browser.</p>';
+          return;
+        }
+
+        // Load persisted high score
+        const highScore = ScoreManager.loadHighScore();
+
+        // Create the initial game state (START phase)
+        gameState = createGameState(canvas, ctx, highScore);
+
+        // Update PhysicsEngine MAX_FALL_SPEED to match canvas height
+        PhysicsEngine.MAX_FALL_SPEED = canvas.height;
+
+        // Load the Ghosty sprite; fall back to strokeRect if it fails
+        const img = new Image();
+        img.onload = () => {
+          ghostyImage = img;
+        };
+        img.onerror = () => {
+          console.warn(
+            "Failed to load assets/ghosty.png — using fallback rectangle.",
+          );
+          ghostyImage = null;
+        };
+        img.src = "assets/ghosty.png";
+
+        // Wire InputHandler.onJump to the correct action per phase
+        InputHandler.onJump = function () {
+          if (gameState.phase === "START") {
+            startGame();
+          } else if (gameState.phase === "PLAYING") {
+            // Preload audio on the very first user interaction
+            AudioManager.preload();
+            PhysicsEngine.applyJump(gameState.ghosty);
+            AudioManager.playJump();
+          } else if (gameState.phase === "GAME_OVER") {
+            restartGame();
+          }
+        };
+
+        // Attach input listeners
+        InputHandler.attach(canvas);
+
+        // Resize handler — updates canvas dimensions, physics cap, and Ghosty position
+        window.addEventListener("resize", () => {
+          canvas.width = window.innerWidth;
+          canvas.height = window.innerHeight;
+          PhysicsEngine.MAX_FALL_SPEED = canvas.height;
+          if (gameState) {
+            if (gameState.phase === "START") {
+              // Re-center Ghosty vertically on the start screen
+              gameState.ghosty.y =
+                canvas.height / 2 - gameState.ghosty.height / 2;
+            } else {
+              // Clamp Ghosty to [0, canvas.height - ghosty.height] during play / game over
+              gameState.ghosty.y = Math.max(
+                0,
+                Math.min(
+                  gameState.ghosty.y,
+                  canvas.height - gameState.ghosty.height,
+                ),
+              );
+            }
+          }
+        });
+
+        // Start the requestAnimationFrame loop
+        rafId = requestAnimationFrame(tick);
+      })();
+    </script>
+  </body>
+</html>
