@@ -308,23 +308,7 @@
             }
           }
 
-          // ── Cloud collision ──────────────────────────────────────────────────
-          for (const cloud of clouds) {
-            if (
-              aabbOverlap(
-                ghosty.x,
-                ghosty.y,
-                ghosty.width,
-                ghosty.height,
-                cloud.x,
-                cloud.y,
-                cloud.width,
-                cloud.height,
-              )
-            ) {
-              return { collided: true, reason: "cloud" };
-            }
-          }
+          // Clouds are decorative only — no collision with clouds.
 
           return { collided: false, reason: null };
         },
@@ -662,23 +646,69 @@
         },
 
         /**
-         * Draw all active clouds as sketchy white/grey stroke rectangles.
+         * Draw all active clouds as fluffy white filled shapes (decorative only).
+         * Uses overlapping filled circles to create a puffy cloud silhouette.
          *
          * @param {CanvasRenderingContext2D} ctx
          * @param {Array<{ x: number, y: number, width: number, height: number }>} clouds
          */
         drawClouds(ctx, clouds) {
           ctx.save();
-          ctx.strokeStyle = "#cccccc";
-          ctx.lineWidth = 2;
 
           for (const cloud of clouds) {
-            ctx.strokeRect(
-              cloud.x + jitter(),
-              cloud.y + jitter(),
-              cloud.width + jitter(),
-              cloud.height + jitter(),
+            const cx = cloud.x + cloud.width / 2;
+            const cy = cloud.y + cloud.height / 2;
+            const w = cloud.width;
+            const h = cloud.height;
+
+            ctx.fillStyle = "rgba(255, 255, 255, 0.82)";
+            ctx.strokeStyle = "rgba(200, 220, 255, 0.5)";
+            ctx.lineWidth = 1;
+
+            // Draw a fluffy cloud from overlapping ellipses
+            ctx.beginPath();
+            // Bottom base — wide flat ellipse
+            ctx.ellipse(
+              cx,
+              cy + h * 0.15,
+              w * 0.42,
+              h * 0.32,
+              0,
+              0,
+              Math.PI * 2,
             );
+            ctx.fill();
+
+            ctx.beginPath();
+            // Left puff
+            ctx.ellipse(
+              cx - w * 0.22,
+              cy - h * 0.05,
+              w * 0.28,
+              h * 0.35,
+              0,
+              0,
+              Math.PI * 2,
+            );
+            ctx.fill();
+
+            ctx.beginPath();
+            // Centre top puff (tallest)
+            ctx.ellipse(cx, cy - h * 0.18, w * 0.3, h * 0.4, 0, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.beginPath();
+            // Right puff
+            ctx.ellipse(
+              cx + w * 0.22,
+              cy - h * 0.05,
+              w * 0.26,
+              h * 0.32,
+              0,
+              0,
+              Math.PI * 2,
+            );
+            ctx.fill();
           }
 
           ctx.restore();

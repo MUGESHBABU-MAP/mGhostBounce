@@ -79,23 +79,7 @@ export function check(ghosty, pipes, clouds, canvasHeight) {
     }
   }
 
-  // ── Cloud collision ────────────────────────────────────────────────────────
-  for (const cloud of clouds) {
-    if (
-      aabbOverlap(
-        ghosty.x,
-        ghosty.y,
-        ghosty.width,
-        ghosty.height,
-        cloud.x,
-        cloud.y,
-        cloud.width,
-        cloud.height,
-      )
-    ) {
-      return { collided: true, reason: "cloud" };
-    }
-  }
+  // Clouds are decorative only — no collision with clouds.
 
   return { collided: false, reason: null };
 }
