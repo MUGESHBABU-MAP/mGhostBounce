@@ -59,7 +59,7 @@ describe("Physics_Engine property-based tests", () => {
             noNaN: true,
           }),
           vy: fc.float({
-            min: Math.fround(-500),
+            min: Math.fround(-420),
             max: Math.fround(600),
             noNaN: true,
           }),

@@ -5,8 +5,8 @@
  * test files. It mirrors the PhysicsEngine object in index.html.
  */
 
-export const GRAVITY = 1200; // px/s²
-export const JUMP_VELOCITY = -500; // px/s (upward)
+export const GRAVITY = 1400; // px/s²
+export const JUMP_VELOCITY = -420; // px/s (upward)
 
 /**
  * Default MAX_FALL_SPEED used when no canvas height is available.
