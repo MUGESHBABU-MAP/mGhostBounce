@@ -2,11 +2,11 @@
 
 ## Introduction
 
-Flappy Kiro is a retro-styled, browser-based endless scroller game. The player guides a ghost character (Ghosty) through a series of pipe obstacles by tapping or clicking to make the ghost jump. The game features a hand-drawn/sketchy visual aesthetic, ambient cloud obstacles, sound effects, and persistent high score tracking. The game runs entirely in the browser with no server-side dependencies.
+Flappy Ghost is a retro-styled, browser-based endless scroller game. The player guides a ghost character (Ghosty) through a series of pipe obstacles by tapping or clicking to make the ghost jump. The game features a hand-drawn/sketchy visual aesthetic, ambient cloud obstacles, sound effects, and persistent high score tracking. The game runs entirely in the browser with no server-side dependencies.
 
 ## Glossary
 
-- **Game**: The Flappy Kiro browser application as a whole.
+- **Game**: The Flappy Ghost browser application as a whole.
 - **Ghosty**: The player-controlled ghost character sprite rendered using `assets/ghosty.png`.
 - **Pipe_Pair**: A pair of green pipes — one extending downward from the top of the viewport and one extending upward from the bottom — with a gap between them for Ghosty to fly through.
 - **Gap**: The vertical opening between the top and bottom pipes of a Pipe_Pair through which Ghosty must pass.
@@ -108,8 +108,8 @@ Flappy Kiro is a retro-styled, browser-based endless scroller game. The player g
 1. WHEN Ghosty passes the horizontal midpoint of a Pipe_Pair without collision, THE Score_Manager SHALL increment the Score by one.
 2. WHILE the Game_Loop is active, THE Renderer SHALL display the Score_Bar at the bottom of the viewport showing "Score: X | High: X" where X reflects the current values.
 3. WHEN the Game transitions to the Game_Over state, THE Score_Manager SHALL compare the final Score to the High_Score and update the High_Score if the final Score is greater.
-4. WHEN the High_Score is updated, THE Score_Manager SHALL persist the current High_Score value to browser local storage using the key "flappyKiroHighScore", regardless of whether the value has changed since the last persistence.
-5. WHEN the Game initializes, THE Score_Manager SHALL set Score to 0 and load the High_Score from browser local storage under the key "flappyKiroHighScore", defaulting to 0 if no value is stored or if the stored value is not a valid non-negative integer.
+4. WHEN the High_Score is updated, THE Score_Manager SHALL persist the current High_Score value to browser local storage using the key "flappyGhostHighScore", regardless of whether the value has changed since the last persistence.
+5. WHEN the Game initializes, THE Score_Manager SHALL set Score to 0 and load the High_Score from browser local storage under the key "flappyGhostHighScore", defaulting to 0 if no value is stored or if the stored value is not a valid non-negative integer.
 
 ---
 

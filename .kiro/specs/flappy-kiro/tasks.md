@@ -1,8 +1,8 @@
-# Implementation Plan: Flappy Kiro
+# Implementation Plan: Flappy Ghost
 
 ## Overview
 
-This plan implements Flappy Kiro as a single `index.html` file with embedded JavaScript and CSS. Tasks are ordered so each builds on the previous: project scaffolding → pure logic modules → game loop integration → rendering → audio → testing.
+This plan implements Flappy Ghost as a single `index.html` file with embedded JavaScript and CSS. Tasks are ordered so each builds on the previous: project scaffolding → pure logic modules → game loop integration → rendering → audio → testing.
 
 All property-based tests use **fast-check** and are co-located in a `tests/` directory alongside a `package.json` that installs fast-check and a test runner (vitest) as dev dependencies. The game itself has no build step and runs directly in the browser.
 
@@ -46,7 +46,7 @@ All property-based tests use **fast-check** and are co-located in a `tests/` dir
     - **Validates: Requirements 2.2, 2.6**
 
 - [x] 5. Score_Manager implementation
-  - Implement `ScoreManager` with `STORAGE_KEY = 'flappyKiroHighScore'`.
+  - Implement `ScoreManager` with `STORAGE_KEY = 'flappyGhostHighScore'`.
   - Implement `loadHighScore()`: wraps `localStorage.getItem` in try/catch; parses as integer; returns `0` if missing, non-numeric, negative, or if `localStorage` throws.
   - Implement `saveHighScore(score)`: wraps `localStorage.setItem` in try/catch; logs `console.warn` on failure.
   - Implement `checkAndUpdateHighScore(score, highScore)`: returns `Math.max(score, highScore)`.
@@ -203,7 +203,7 @@ All property-based tests use **fast-check** and are co-located in a `tests/` dir
 
 - All property-based tests live in `tests/` and run with `npm test` (vitest + fast-check). The game itself has no build step.
 - Pure logic functions (physics, scoring, spawning, collision) must be importable by Node.js test files without a browser DOM. Keep them as plain ES modules in `tests/` helper files.
-- Each property test must include the tag comment `// Feature: flappy-kiro, Property N: <property_text>` and run with `numRuns: 100`.
+- Each property test must include the tag comment `// Feature: flappy-ghost, Property N: <property_text>` and run with `numRuns: 100`.
 - The 13 correctness properties from the design document map 1-to-1 to tasks 4, 6, 8, 10, and 12. No property may be skipped.
 - Rendering and audio components are browser-only; test them with lightweight stubs/mocks in unit tests (task 18) rather than property tests.
 - Tasks marked with `*` are optional and can be skipped for faster MVP.

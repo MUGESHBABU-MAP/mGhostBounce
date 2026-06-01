@@ -8,7 +8,7 @@ import {
 } from "./score.js";
 
 describe("Score_Manager property-based tests", () => {
-  // Feature: flappy-kiro, Property 9: Score equals the count of pipes passed
+  // Feature: flappy-ghost, Property 9: Score equals the count of pipes passed
   it("Property 9: score equals count of scored===true pipes, each flag transitions false→true at most once", () => {
     // Validates: Requirements 6.1
     fc.assert(
@@ -40,7 +40,7 @@ describe("Score_Manager property-based tests", () => {
     );
   });
 
-  // Feature: flappy-kiro, Property 10: High score update is the maximum of score and prior high score
+  // Feature: flappy-ghost, Property 10: High score update is the maximum of score and prior high score
   it("Property 10: checkAndUpdateHighScore returns Math.max(score, highScore)", () => {
     // Validates: Requirements 6.3
     fc.assert(
@@ -58,7 +58,7 @@ describe("Score_Manager property-based tests", () => {
     );
   });
 
-  // Feature: flappy-kiro, Property 11: High score localStorage round-trip preserves value
+  // Feature: flappy-ghost, Property 11: High score localStorage round-trip preserves value
   it("Property 11: valid integers round-trip through storage; invalid inputs return 0", () => {
     // Validates: Requirements 6.4, 6.5
 
@@ -104,7 +104,7 @@ describe("Score_Manager property-based tests", () => {
     );
   });
 
-  // Feature: flappy-kiro, Property 12: High score is preserved across restarts
+  // Feature: flappy-ghost, Property 12: High score is preserved across restarts
   it("Property 12: high score is unchanged after a restart (score resets to 0, high score reloads from storage)", () => {
     // Validates: Requirements 7.2
     fc.assert(

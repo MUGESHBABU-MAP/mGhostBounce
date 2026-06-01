@@ -1,8 +1,8 @@
-# Design Document: Flappy Kiro
+# Design Document: Flappy Ghost
 
 ## Overview
 
-Flappy Kiro is a browser-based endless scroller game implemented as a **single HTML file** with no build step or server-side dependencies. The player controls Ghosty — a ghost character sprite — through a gauntlet of scrolling pipe obstacles and cloud hazards. The game uses HTML5 Canvas for rendering, the Web Audio API for sound effects, and `localStorage` for high score persistence.
+Flappy Ghost is a browser-based endless scroller game implemented as a **single HTML file** with no build step or server-side dependencies. The player controls Ghosty — a ghost character sprite — through a gauntlet of scrolling pipe obstacles and cloud hazards. The game uses HTML5 Canvas for rendering, the Web Audio API for sound effects, and `localStorage` for high score persistence.
 
 The architecture follows a classic **game loop pattern**: a fixed-timestep update cycle driven by `requestAnimationFrame` that separates physics/logic updates from rendering. All game components are plain JavaScript objects/classes embedded in the HTML file.
 
@@ -172,7 +172,7 @@ Tracks score and persists high score.
 
 ```js
 ScoreManager {
-  STORAGE_KEY: 'flappyKiroHighScore',
+  STORAGE_KEY: 'flappyGhostHighScore',
 
   loadHighScore(): number
   saveHighScore(score: number): void
@@ -352,7 +352,7 @@ _For any_ final score `s` and prior high score `h`, after the game-over high sco
 
 ### Property 11: High score localStorage round-trip preserves value
 
-_For any_ valid non-negative integer `n`, writing `n` to localStorage under key `"flappyKiroHighScore"` and then reading it back SHALL return `n`; and for any non-numeric or missing stored value, `loadHighScore` SHALL return `0`.
+_For any_ valid non-negative integer `n`, writing `n` to localStorage under key `"flappyGhostHighScore"` and then reading it back SHALL return `n`; and for any non-numeric or missing stored value, `loadHighScore` SHALL return `0`.
 
 **Validates: Requirements 6.4, 6.5**
 
@@ -421,7 +421,7 @@ The game logic (physics, collision, scoring) is extracted into pure functions th
 **Configuration**: Minimum 100 iterations per property test (`numRuns: 100`).
 
 **Tag format**: Each property test is tagged with a comment:
-`// Feature: flappy-kiro, Property N: <property_text>`
+`// Feature: flappy-ghost, Property N: <property_text>`
 
 Properties to implement as property-based tests:
 

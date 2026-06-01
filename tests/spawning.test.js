@@ -12,7 +12,7 @@ import {
 } from "./spawning.js";
 
 describe("Spawning and Scrolling property-based tests", () => {
-  // Feature: flappy-kiro, Property 4: Pipe spawn invariants hold for any canvas size
+  // Feature: flappy-ghost, Property 4: Pipe spawn invariants hold for any canvas size
   it("Property 4: spawned pipe satisfies gap center bounds and minimum gap height", () => {
     // Validates: Requirements 3.3, 3.4
     fc.assert(
@@ -36,7 +36,7 @@ describe("Spawning and Scrolling property-based tests", () => {
     );
   });
 
-  // Feature: flappy-kiro, Property 5: Off-screen entities are always removed from the active set
+  // Feature: flappy-ghost, Property 5: Off-screen entities are always removed from the active set
   it("Property 5: no entity with x + width < 0 remains after culling", () => {
     // Validates: Requirements 3.5, 4.4
     fc.assert(
@@ -70,7 +70,7 @@ describe("Spawning and Scrolling property-based tests", () => {
     );
   });
 
-  // Feature: flappy-kiro, Property 6: Cloud spawn invariants hold for any canvas size
+  // Feature: flappy-ghost, Property 6: Cloud spawn invariants hold for any canvas size
   it("Property 6: spawned cloud satisfies y-position bounds and speed bounds", () => {
     // Validates: Requirements 4.2, 4.3
     fc.assert(

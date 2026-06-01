@@ -3,7 +3,7 @@ import * as fc from "fast-check";
 import { createAudioManager } from "./audio.js";
 
 describe("Audio_Manager property-based tests", () => {
-  // Feature: flappy-kiro, Property 13: Sound re-trigger always resets playback to the beginning
+  // Feature: flappy-ghost, Property 13: Sound re-trigger always resets playback to the beginning
   it("Property 13: playJump() and playGameOver() always reset currentTime to 0 before play() is invoked", () => {
     // Validates: Requirements 8.4
     fc.assert(

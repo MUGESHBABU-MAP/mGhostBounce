@@ -11,17 +11,17 @@
       name="apple-mobile-web-app-status-bar-style"
       content="black-translucent"
     />
-    <meta name="apple-mobile-web-app-title" content="Flappy Kiro" />
+    <meta name="apple-mobile-web-app-title" content="Flappy Ghost" />
     <meta name="theme-color" content="#b0e0ff" />
     <meta
       name="description"
-      content="Flappy Kiro — a retro browser game. Tap to fly Ghosty through the pipes!"
+      content="Flappy Ghost — a retro browser game. Tap to fly Ghosty through the pipes!"
     />
     <link
       rel="icon"
       href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%23b0e0ff'/><text y='24' x='4' font-size='22'>👻</text></svg>"
     />
-    <title>Flappy Kiro</title>
+    <title>Flappy Ghost</title>
     <style>
       * {
         margin: 0;
@@ -180,7 +180,7 @@
     <script>
       // ── Score_Manager ──────────────────────────────────────────────────────────
       const ScoreManager = {
-        STORAGE_KEY: "flappyKiroHighScore",
+        STORAGE_KEY: "flappyGhostHighScore",
 
         /**
          * Load the persisted high score from localStorage.
@@ -819,7 +819,7 @@
           ctx.font = "bold 56px 'Courier New', Courier, monospace";
           ctx.textAlign = "center";
           ctx.textBaseline = "middle";
-          ctx.fillText("FLAPPY KIRO", cx, cy - 100);
+          ctx.fillText("FLAPPY GHOST", cx, cy - 100);
 
           // Ghosty centred on screen
           const gw = ghosty.width * 2;

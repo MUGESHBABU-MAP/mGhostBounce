@@ -1,5 +1,5 @@
 /**
- * physics.js — Pure physics functions for Flappy Kiro.
+ * physics.js — Pure physics functions for Flappy Ghost.
  *
  * This module has NO DOM dependency and can be imported directly by Node.js
  * test files. It mirrors the PhysicsEngine object in index.html.

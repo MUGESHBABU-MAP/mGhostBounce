@@ -1,5 +1,5 @@
 /**
- * score.js — Pure score/high-score functions for Flappy Kiro.
+ * score.js — Pure score/high-score functions for Flappy Ghost.
  *
  * This module has NO DOM dependency and can be imported directly by Node.js
  * test files. It mirrors the ScoreManager object in index.html.
@@ -9,7 +9,7 @@
  * localStorage.
  */
 
-export const STORAGE_KEY = "flappyKiroHighScore";
+export const STORAGE_KEY = "flappyGhostHighScore";
 
 /**
  * Create a simple in-memory storage object that matches the

@@ -1,5 +1,5 @@
 /**
- * audio.js — Testable AudioManager factory for Flappy Kiro.
+ * audio.js — Testable AudioManager factory for Flappy Ghost.
  *
  * This module has NO DOM dependency and can be imported directly by Node.js
  * test files. It mirrors the AudioManager object in index.html but accepts

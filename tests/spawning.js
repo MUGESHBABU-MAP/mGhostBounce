@@ -1,5 +1,5 @@
 /**
- * spawning.js — Pure pipe and cloud spawning/culling functions for Flappy Kiro.
+ * spawning.js — Pure pipe and cloud spawning/culling functions for Flappy Ghost.
  *
  * This module has NO DOM dependency and can be imported directly by Node.js
  * test files. It mirrors the Spawning section in index.html.

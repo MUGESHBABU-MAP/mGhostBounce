@@ -1,5 +1,5 @@
 /**
- * collision.js — Pure collision-detection functions for Flappy Kiro.
+ * collision.js — Pure collision-detection functions for Flappy Ghost.
  *
  * This module has NO DOM dependency and can be imported directly by Node.js
  * test files. It mirrors the Collision_Detector section in index.html.

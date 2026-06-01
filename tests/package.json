@@ -1,7 +1,7 @@
 {
-  "name": "flappy-kiro-tests",
+  "name": "flappy-ghost-tests",
   "version": "1.0.0",
-  "description": "Property-based and unit tests for Flappy Kiro",
+  "description": "Property-based and unit tests for Flappy Ghost",
   "type": "module",
   "scripts": {
     "test": "vitest run"

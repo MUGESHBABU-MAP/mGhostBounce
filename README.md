@@ -1,4 +1,4 @@
-# Flappy Kiro 👻
+# Flappy Ghost 👻
 
 A retro-styled, browser-based endless scroller game. Guide Ghosty through the pipes — tap, click, or press Space to jump!
 

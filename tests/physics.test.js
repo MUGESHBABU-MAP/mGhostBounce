@@ -11,7 +11,7 @@ import {
 const MAX_FALL_SPEED = DEFAULT_MAX_FALL_SPEED;
 
 describe("Physics_Engine property-based tests", () => {
-  // Feature: flappy-kiro, Property 1: Ghosty velocity is always clamped within bounds
+  // Feature: flappy-ghost, Property 1: Ghosty velocity is always clamped within bounds
   it("Property 1: vy stays in [JUMP_VELOCITY, MAX_FALL_SPEED] after any action sequence", () => {
     // Validates: Requirements 2.5, 2.6
     fc.assert(
@@ -47,7 +47,7 @@ describe("Physics_Engine property-based tests", () => {
     );
   });
 
-  // Feature: flappy-kiro, Property 2: Physics update formula holds for any delta time
+  // Feature: flappy-ghost, Property 2: Physics update formula holds for any delta time
   it("Property 2: position and velocity match the formula after one update", () => {
     // Validates: Requirements 2.1, 2.4
     fc.assert(
@@ -89,7 +89,7 @@ describe("Physics_Engine property-based tests", () => {
     );
   });
 
-  // Feature: flappy-kiro, Property 3: Jump impulse always replaces velocity
+  // Feature: flappy-ghost, Property 3: Jump impulse always replaces velocity
   it("Property 3: applyJump always sets vy to exactly JUMP_VELOCITY", () => {
     // Validates: Requirements 2.2, 2.6
     fc.assert(

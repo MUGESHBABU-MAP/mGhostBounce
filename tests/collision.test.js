@@ -3,7 +3,7 @@ import * as fc from "fast-check";
 import { check } from "./collision.js";
 
 describe("Collision_Detector property-based tests", () => {
-  // Feature: flappy-kiro, Property 7: Any pipe overlap triggers game over (clouds are decorative)
+  // Feature: flappy-ghost, Property 7: Any pipe overlap triggers game over (clouds are decorative)
   it("Property 7: any pipe overlap triggers game over", () => {
     // Validates: Requirements 5.1
     // Note: clouds are decorative only and do NOT trigger game over (Requirement 5.2 updated)
@@ -52,7 +52,7 @@ describe("Collision_Detector property-based tests", () => {
     );
   });
 
-  // Feature: flappy-kiro, Property 7b: Clouds do NOT trigger game over (decorative only)
+  // Feature: flappy-ghost, Property 7b: Clouds do NOT trigger game over (decorative only)
   it("Property 7b: cloud overlap does NOT trigger game over", () => {
     fc.assert(
       fc.property(
@@ -78,7 +78,7 @@ describe("Collision_Detector property-based tests", () => {
     );
   });
 
-  // Feature: flappy-kiro, Property 8: Any boundary violation triggers game over
+  // Feature: flappy-ghost, Property 8: Any boundary violation triggers game over
   it("Property 8: any boundary violation triggers game over", () => {
     // Validates: Requirements 5.3, 5.4
     const GHOSTY_HEIGHT = 48;
