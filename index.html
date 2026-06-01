@@ -613,33 +613,86 @@
         },
 
         /**
-         * Draw all active pipe pairs with a green sketchy stroke style.
-         * Each pipe pair consists of a top pipe and a bottom pipe separated
-         * by a gap.
+         * Draw all active pipe pairs in a classic Mario-style:
+         * - Solid green filled body
+         * - Dark green border outline
+         * - Wider cap/flange at the inner end (the end facing the gap)
          *
          * @param {CanvasRenderingContext2D} ctx
          * @param {Array<{ x: number, gapCenterY: number, gapHeight: number, width: number }>} pipes
          * @param {number} canvasHeight
          */
         drawPipes(ctx, pipes, canvasHeight) {
+          // Pipe colour palette
+          const BODY_FILL = "#3a9e3a"; // main green body
+          const BODY_SHADE = "#2a7a2a"; // darker right-side shading strip
+          const BODY_LIGHT = "#5ec45e"; // lighter left-side highlight strip
+          const BORDER = "#1a4a1a"; // dark outline
+          const CAP_FILL = "#2e8b2e"; // cap slightly darker than body
+          const CAP_HIGHLIGHT = "#6ed46e"; // bright top edge of cap
+
+          // Cap dimensions relative to pipe width
+          const CAP_EXTRA = 8; // how many px wider the cap is on each side
+          const CAP_HEIGHT = 18; // height of the cap flange
+
           ctx.save();
-          ctx.strokeStyle = "#228B22"; // forest green
-          ctx.lineWidth = 3;
 
           for (const pipe of pipes) {
             const gapTop = pipe.gapCenterY - pipe.gapHeight / 2;
             const gapBottom = pipe.gapCenterY + pipe.gapHeight / 2;
+            const pw = pipe.width;
+            const px = pipe.x;
 
-            // Top pipe — jitter only on position, never on width/height (keeps gap stable)
-            ctx.strokeRect(pipe.x + jitter(0.5), 0, pipe.width, gapTop);
+            // ── Helper: draw one pipe segment ──────────────────────────────
+            // bodyY / bodyH : full extent of the pipe body (cap is drawn ON TOP of it)
+            // capY          : top-left y of the cap rectangle (always positive height)
+            // capDir        : +1 = highlight at bottom of cap (top pipe, gap below)
+            //                 -1 = highlight at top of cap (bottom pipe, gap above)
+            const drawPipeSegment = (bodyX, bodyY, bodyH, capY, capDir) => {
+              if (bodyH <= 0) return;
 
-            // Bottom pipe
-            ctx.strokeRect(
-              pipe.x + jitter(0.5),
-              gapBottom,
-              pipe.width,
-              canvasHeight - gapBottom,
-            );
+              // ── Body fill ────────────────────────────────────────────────
+              ctx.fillStyle = BODY_FILL;
+              ctx.fillRect(bodyX, bodyY, pw, bodyH);
+
+              // Left highlight strip
+              ctx.fillStyle = BODY_LIGHT;
+              ctx.fillRect(bodyX + 4, bodyY, 6, bodyH);
+
+              // Right shade strip
+              ctx.fillStyle = BODY_SHADE;
+              ctx.fillRect(bodyX + pw - 10, bodyY, 6, bodyH);
+
+              // ── Cap (flange) — always drawn downward from capY ───────────
+              const capX = bodyX - CAP_EXTRA;
+              const capW = pw + CAP_EXTRA * 2;
+
+              ctx.fillStyle = CAP_FILL;
+              ctx.fillRect(capX, capY, capW, CAP_HEIGHT);
+
+              // Highlight line on the inner edge (the edge facing the gap)
+              ctx.fillStyle = CAP_HIGHLIGHT;
+              // capDir +1 → inner edge is the bottom of the cap
+              // capDir -1 → inner edge is the top of the cap
+              const hlY = capDir === 1 ? capY + CAP_HEIGHT - 3 : capY;
+              ctx.fillRect(capX + 2, hlY, capW - 4, 3);
+
+              // ── Border outline ───────────────────────────────────────────
+              ctx.strokeStyle = BORDER;
+              ctx.lineWidth = 2;
+              ctx.strokeRect(bodyX, bodyY, pw, bodyH);
+              ctx.strokeRect(capX, capY, capW, CAP_HEIGHT);
+            };
+
+            // ── Top pipe (hangs from top, cap at bottom facing gap) ───────
+            // Body covers y=0 → gapTop; cap sits at the bottom of the body.
+            const topBodyH = Math.max(0, gapTop);
+            drawPipeSegment(px, 0, topBodyH, gapTop - CAP_HEIGHT, 1);
+
+            // ── Bottom pipe (rises from bottom, cap at top facing gap) ────
+            // Body covers gapBottom → canvasHeight; cap sits at the top of the body.
+            const botBodyH = Math.max(0, canvasHeight - gapBottom);
+            drawPipeSegment(px, gapBottom, botBodyH, gapBottom, -1);
           }
 
           ctx.restore();
