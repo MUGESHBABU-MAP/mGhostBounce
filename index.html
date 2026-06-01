@@ -2,7 +2,25 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+    />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta
+      name="apple-mobile-web-app-status-bar-style"
+      content="black-translucent"
+    />
+    <meta name="apple-mobile-web-app-title" content="Flappy Kiro" />
+    <meta name="theme-color" content="#b0e0ff" />
+    <meta
+      name="description"
+      content="Flappy Kiro — a retro browser game. Tap to fly Ghosty through the pipes!"
+    />
+    <link
+      rel="icon"
+      href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%23b0e0ff'/><text y='24' x='4' font-size='22'>👻</text></svg>"
+    />
     <title>Flappy Kiro</title>
     <style>
       * {
@@ -23,6 +41,8 @@
         display: block;
         width: 100vw;
         height: 100vh;
+        touch-action: none; /* prevent scroll/zoom on touch */
+        -webkit-tap-highlight-color: transparent;
       }
     </style>
   </head>
@@ -33,7 +53,7 @@
     <script>
       // ── Constants ──────────────────────────────────────────────────────────────
       const PIPE_SPEED = 150; // px/s
-      const PIPE_INTERVAL = 200; // px (leading-edge-to-leading-edge)
+      const PIPE_INTERVAL = 380; // px (leading-edge-to-leading-edge) — comfortable spacing
       const PIPE_WIDTH = 60; // px
       const GAP_MIN_RATIO = 0.2; // gap center min: 20% of canvas height
       const GAP_MAX_RATIO = 0.8; // gap center max: 80% of canvas height
@@ -115,6 +135,9 @@
           lastTimestamp: 0,
           nextPipeX: canvas.width + PIPE_INTERVAL, // x at which the next pipe spawns
           nextCloudX: canvas.width + CLOUD_INTERVAL_MIN, // x at which the next cloud spawns
+          // Visual feedback state
+          scorePopups: [], // [{ x, y, age, text }] — "+1" animations
+          tapRipples: [], // [{ x, y, age }] — tap feedback circles
         };
       }
     </script>
@@ -469,13 +492,17 @@
             }
           };
 
-          this._mouseHandler = () => {
-            if (typeof this.onJump === "function") this.onJump();
+          this._mouseHandler = (e) => {
+            if (typeof this.onJump === "function")
+              this.onJump(e.clientX, e.clientY);
           };
 
           this._touchHandler = (e) => {
             e.preventDefault(); // suppress scroll / zoom on touch
-            if (typeof this.onJump === "function") this.onJump();
+            if (typeof this.onJump === "function") {
+              const t = e.changedTouches[0];
+              this.onJump(t.clientX, t.clientY);
+            }
           };
 
           document.addEventListener("keydown", this._keyHandler);
@@ -566,26 +593,39 @@
          * @param {HTMLImageElement | null}   image
          */
         drawGhosty(ctx, ghosty, image) {
+          // Tilt Ghosty based on vertical velocity: nose up on jump, nose down on fall
+          const maxTilt = Math.PI / 4; // 45°
+          const tilt = Math.max(
+            -maxTilt,
+            Math.min(maxTilt, (ghosty.vy / 600) * maxTilt * 2),
+          );
+          const cx = ghosty.x + ghosty.width / 2;
+          const cy = ghosty.y + ghosty.height / 2;
+
+          ctx.save();
+          ctx.translate(cx, cy);
+          ctx.rotate(tilt);
+
           if (image) {
             ctx.drawImage(
               image,
-              ghosty.x,
-              ghosty.y,
+              -ghosty.width / 2,
+              -ghosty.height / 2,
               ghosty.width,
               ghosty.height,
             );
           } else {
-            ctx.save();
             ctx.strokeStyle = "#ffffff";
             ctx.lineWidth = 2;
             ctx.strokeRect(
-              ghosty.x + jitter(),
-              ghosty.y + jitter(),
+              -ghosty.width / 2 + jitter(),
+              -ghosty.height / 2 + jitter(),
               ghosty.width,
               ghosty.height,
             );
-            ctx.restore();
           }
+
+          ctx.restore();
         },
 
         /**
@@ -765,13 +805,46 @@
         },
 
         /**
+         * Draw "+1" score popup animations.
+         */
+        drawScorePopups(ctx, popups) {
+          ctx.save();
+          for (const p of popups) {
+            const alpha = Math.max(0, 1 - p.age / 0.8);
+            const y = p.y - p.age * 60; // float upward
+            ctx.globalAlpha = alpha;
+            ctx.fillStyle = "#ffd700";
+            ctx.font = "bold 28px 'Courier New', Courier, monospace";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillText(p.text, p.x, y);
+          }
+          ctx.globalAlpha = 1;
+          ctx.restore();
+        },
+
+        /**
+         * Draw tap ripple feedback circles.
+         */
+        drawTapRipples(ctx, ripples) {
+          ctx.save();
+          for (const r of ripples) {
+            const alpha = Math.max(0, 1 - r.age / 0.35);
+            const radius = 10 + r.age * 80;
+            ctx.globalAlpha = alpha * 0.5;
+            ctx.strokeStyle = "#ffffff";
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(r.x, r.y, radius, 0, Math.PI * 2);
+            ctx.stroke();
+          }
+          ctx.globalAlpha = 1;
+          ctx.restore();
+        },
+
+        /**
          * Top-level render dispatcher. Calls the appropriate draw methods
          * based on the current game phase.
-         *
-         * @param {{ phase: string, ghosty: object, pipes: Array, clouds: Array,
-         *           score: number, highScore: number,
-         *           canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D }} gameState
-         * @param {HTMLImageElement | null} ghostyImage
          */
         render(gameState, ghostyImage = null) {
           const {
@@ -783,19 +856,22 @@
             clouds,
             score,
             highScore,
+            scorePopups,
+            tapRipples,
           } = gameState;
 
           // Always draw the background first
           this.drawBackground(ctx, canvas);
 
           if (phase === "START") {
-            // Clouds add atmosphere on the start screen too
             this.drawClouds(ctx, clouds);
             this.drawStartScreen(ctx, canvas, ghosty, ghostyImage);
           } else if (phase === "PLAYING") {
             this.drawClouds(ctx, clouds);
             this.drawPipes(ctx, pipes, canvas.height);
             this.drawGhosty(ctx, ghosty, ghostyImage);
+            this.drawTapRipples(ctx, tapRipples);
+            this.drawScorePopups(ctx, scorePopups);
             this.drawScoreBar(ctx, score, highScore, canvas);
           } else if (phase === "GAME_OVER") {
             this.drawClouds(ctx, clouds);
@@ -880,8 +956,27 @@
             if (!pipe.scored && pipe.x + pipe.width / 2 < gameState.ghosty.x) {
               pipe.scored = true;
               gameState.score += 1;
+              // Spawn a "+1" popup above Ghosty
+              gameState.scorePopups.push({
+                x: gameState.ghosty.x + gameState.ghosty.width / 2,
+                y: gameState.ghosty.y - 10,
+                age: 0,
+                text: "+1",
+              });
             }
           }
+
+          // ── Advance and cull score popups ─────────────────────────────────────
+          for (const p of gameState.scorePopups) p.age += delta;
+          gameState.scorePopups = gameState.scorePopups.filter(
+            (p) => p.age < 0.8,
+          );
+
+          // ── Advance and cull tap ripples ──────────────────────────────────────
+          for (const r of gameState.tapRipples) r.age += delta;
+          gameState.tapRipples = gameState.tapRipples.filter(
+            (r) => r.age < 0.35,
+          );
 
           // ── Collision check ───────────────────────────────────────────────────
           const collision = CollisionDetector.check(
@@ -925,6 +1020,8 @@
         gameState.score = 0;
         gameState.pipes = [];
         gameState.clouds = [];
+        gameState.scorePopups = [];
+        gameState.tapRipples = [];
         gameState.lastTimestamp = 0;
 
         // Reset Ghosty to the vertical centre of the canvas
@@ -980,7 +1077,7 @@
         img.src = "assets/ghosty.png";
 
         // Wire InputHandler.onJump to the correct action per phase
-        InputHandler.onJump = function () {
+        InputHandler.onJump = function (tapX, tapY) {
           if (gameState.phase === "START") {
             startGame();
           } else if (gameState.phase === "PLAYING") {
@@ -988,6 +1085,16 @@
             AudioManager.preload();
             PhysicsEngine.applyJump(gameState.ghosty);
             AudioManager.playJump();
+            // Tap ripple at the tap/click position (or Ghosty centre if keyboard)
+            const rx =
+              tapX !== undefined
+                ? tapX
+                : gameState.ghosty.x + gameState.ghosty.width / 2;
+            const ry =
+              tapY !== undefined
+                ? tapY
+                : gameState.ghosty.y + gameState.ghosty.height / 2;
+            gameState.tapRipples.push({ x: rx, y: ry, age: 0 });
           } else if (gameState.phase === "GAME_OVER") {
             restartGame();
           }
